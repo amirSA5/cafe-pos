@@ -4,6 +4,7 @@ import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Select } from "../components/ui/Select";
 import { Modal } from "../components/ui/Modal";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 
 function money(n) {
   const v = Number(n);
@@ -134,6 +135,10 @@ export function ProductsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(null); // product to delete
+  const [deletingBusy, setDeletingBusy] = useState(false);
+
   const categories = useMemo(() => {
     const set = new Set(items.map((p) => p.category).filter(Boolean));
     return ["", ...Array.from(set).sort()];
@@ -182,6 +187,26 @@ export function ProductsPage() {
     setModalOpen(false);
     setEditing(null);
     await load();
+  }
+
+  function onAskDelete(p) {
+    setDeleting(p);
+    setConfirmOpen(true);
+  }
+
+  async function onConfirmDelete() {
+    if (!deleting?._id) return;
+    setDeletingBusy(true);
+    try {
+      await api.products.remove(deleting._id);
+      setConfirmOpen(false);
+      setDeleting(null);
+      await load();
+    } catch (e) {
+      alert(e.message || "Delete failed");
+    } finally {
+      setDeletingBusy(false);
+    }
   }
 
   return (
@@ -305,7 +330,7 @@ export function ProductsPage() {
                       >
                         Edit
                       </Button>
-                      <Button variant="danger" onClick={() => onDelete(p)}>
+                      <Button variant="danger" onClick={() => onAskDelete(p)}>
                         Delete
                       </Button>
                     </div>
@@ -316,6 +341,26 @@ export function ProductsPage() {
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Delete product"
+        message={
+          deleting
+            ? `Delete "${deleting.name}"? This cannot be undone.`
+            : "Delete this product?"
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+        loading={deletingBusy}
+        onCancel={() => {
+          if (deletingBusy) return;
+          setConfirmOpen(false);
+          setDeleting(null);
+        }}
+        onConfirm={onConfirmDelete}
+      />
 
       <Modal
         open={modalOpen}

@@ -52,7 +52,7 @@ export function CashierPage() {
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState([]); // [{product, qty}]
 
-  const [taxRate, setTaxRate] = useState("0.19");
+  const [taxRate, setTaxRate] = useState("0");
   const [paidAmount, setPaidAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
 
