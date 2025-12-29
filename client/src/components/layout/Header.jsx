@@ -76,6 +76,15 @@ export function Header({ path }) {
                 <TabLink href="/stock" active={is("/stock")}>
                   Stock
                 </TabLink>
+                <TabLink href="/suppliers" active={is("/suppliers")}>
+                  Suppliers
+                </TabLink>
+                <TabLink
+                  href="/purchase-invoices"
+                  active={is("/purchase-invoices")}
+                >
+                  Purchase Invoices
+                </TabLink>
               </>
             ) : null}
           </nav>

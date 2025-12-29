@@ -8,6 +8,8 @@ import { ordersRoutes } from "./routes/ordersRoutes.js";
 import { authRoutes } from "./routes/authRoutes.js";
 import { usersRoutes } from "./routes/usersRoutes.js";
 import { stockRoutes } from "./routes/stockRoutes.js";
+import { suppliersRoutes } from "./routes/suppliersRoutes.js";
+import { purchaseInvoicesRoutes } from "./routes/purchaseInvoicesRoutes.js";
 
 dotenv.config();
 
@@ -31,6 +33,10 @@ app.use("/api/products", productsRoutes);
 app.use("/api/orders", ordersRoutes);
 // Stock
 app.use("/api/stock", stockRoutes);
+// Suppliers
+app.use("/api/suppliers", suppliersRoutes);
+// Purchase Invoices
+app.use("/api/purchase-invoices", purchaseInvoicesRoutes);
 
 async function start() {
   const port = process.env.PORT || 4000;

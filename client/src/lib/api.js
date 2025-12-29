@@ -131,4 +131,54 @@ export const api = {
       return request(`/api/stock/movements${q ? `?${q}` : ""}`);
     },
   },
+  // Suppliers
+  suppliers: {
+    list: (params = {}) => {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === "") return;
+        qs.set(k, String(v));
+      });
+      const q = qs.toString();
+      return request(`/api/suppliers${q ? `?${q}` : ""}`);
+    },
+    create: (payload) =>
+      request("/api/suppliers", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    update: (id, payload) =>
+      request(`/api/suppliers/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }),
+    remove: (id) =>
+      request(`/api/suppliers/${id}`, {
+        method: "DELETE",
+      }),
+  },
+
+  // Purchase Invoices
+  purchaseInvoices: {
+    list: (params = {}) => {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === "") return;
+        qs.set(k, String(v));
+      });
+      const q = qs.toString();
+      return request(`/api/purchase-invoices${q ? `?${q}` : ""}`);
+    },
+    get: (id) => request(`/api/purchase-invoices/${id}`),
+    create: (payload) =>
+      request("/api/purchase-invoices", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    post: (id, payload = {}) =>
+      request(`/api/purchase-invoices/${id}/post`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+  },
 };

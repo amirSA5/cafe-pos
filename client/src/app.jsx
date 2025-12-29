@@ -14,6 +14,8 @@ import { LoginPage } from "./pages/LoginPage";
 import { ReceiptPage } from "./pages/ReceiptPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { StockPage } from "./pages/StockPage";
+import { SuppliersPage } from "./pages/SuppliersPage";
+import { PurchaseInvoicesPage } from "./pages/PurchaseInvoicesPage";
 
 function PageShell({ children }) {
   return (
@@ -79,6 +81,14 @@ export function App() {
 
           <Guard path="/stock" roles={["admin"]}>
             <StockPage />
+          </Guard>
+
+          <Guard path="/suppliers" roles={["admin"]}>
+            <SuppliersPage />
+          </Guard>
+
+          <Guard path="/purchase-invoices" roles={["admin"]}>
+            <PurchaseInvoicesPage />
           </Guard>
         </Router>
       </PageShell>
