@@ -6,6 +6,7 @@ import { Select } from "../components/ui/Select";
 import { Modal } from "../components/ui/Modal";
 import { InfoCard } from "../components/ui/InfoCard";
 import { route } from "preact-router";
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 
 function money(n) {
   const v = Number(n);
@@ -60,6 +61,10 @@ export function OrdersPage() {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsErr, setDetailsErr] = useState("");
 
+  const [voidOpen, setVoidOpen] = useState(false);
+  const [voidOrderTarget, setVoidOrderTarget] = useState(null);
+  const [voidBusy, setVoidBusy] = useState(false);
+
   async function load() {
     setLoading(true);
     setErr("");
@@ -103,6 +108,21 @@ export function OrdersPage() {
     () => round2(items.reduce((s, o) => s + (Number(o.total) || 0), 0)),
     [items]
   );
+
+  async function confirmVoid() {
+    if (!voidOrderTarget?._id) return;
+    setVoidBusy(true);
+    try {
+      await api.orders.void(voidOrderTarget._id, { reason: "" });
+      setVoidOpen(false);
+      setVoidOrderTarget(null);
+      await load();
+    } catch (e) {
+      alert(e.message || "Void failed");
+    } finally {
+      setVoidBusy(false);
+    }
+  }
 
   return (
     <section style={card}>
@@ -206,6 +226,17 @@ export function OrdersPage() {
                       >
                         Reprint
                       </Button>
+                      {o.status === "paid" ? (
+                        <Button
+                          variant="danger"
+                          onClick={() => {
+                            setVoidOrderTarget(o);
+                            setVoidOpen(true);
+                          }}
+                        >
+                          Void
+                        </Button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -214,6 +245,26 @@ export function OrdersPage() {
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={voidOpen}
+        title="Void order"
+        message={
+          voidOrderTarget
+            ? `Void order "${voidOrderTarget.number}"? This will exclude it from sales totals.`
+            : "Void this order?"
+        }
+        confirmText="Void"
+        cancelText="Cancel"
+        danger
+        loading={voidBusy}
+        onCancel={() => {
+          if (voidBusy) return;
+          setVoidOpen(false);
+          setVoidOrderTarget(null);
+        }}
+        onConfirm={confirmVoid}
+      />
 
       <Modal
         open={detailsOpen}

@@ -32,7 +32,15 @@ const paymentSchema = new mongoose.Schema(
 const orderSchema = new mongoose.Schema(
   {
     number: { type: String, required: true, unique: true }, // readable ref e.g. POS-20251229-0001
-    status: { type: String, enum: ["open", "paid", "void"], default: "paid" },
+    status: { type: String, enum: ["paid", "void"], default: "paid" },
+
+    voidedAt: { type: Date, default: null },
+    voidedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    voidReason: { type: String, default: "" },
 
     items: { type: [orderItemSchema], default: [] },
 

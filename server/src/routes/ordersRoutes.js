@@ -3,6 +3,8 @@ import {
   checkout,
   getOrder,
   listOrders,
+  voidOrder,
+  salesSummary,
 } from "../controllers/ordersController.js";
 import { authRequired, requireRole } from "../middleware/auth.js";
 
@@ -16,11 +18,19 @@ ordersRoutes.post(
   checkout
 );
 
-// Orders view/list: admin only (you can relax later if needed)
+// Summary: admin only
+ordersRoutes.get("/summary", authRequired, requireRole("admin"), salesSummary);
+
+// Orders view/list: admin only
 ordersRoutes.get("/", authRequired, requireRole("admin"), listOrders);
+
+// Get by id: admin + cashier (needed for receipt)
 ordersRoutes.get(
   "/:id",
   authRequired,
   requireRole("admin", "cashier"),
   getOrder
 );
+
+// Void: admin only
+ordersRoutes.post("/:id/void", authRequired, requireRole("admin"), voidOrder);

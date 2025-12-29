@@ -157,3 +157,96 @@ export async function checkout(req, res) {
 
   res.status(201).json(created);
 }
+
+export async function voidOrder(req, res) {
+  const id = req.params.id;
+  const reason = String(req.body?.reason || "").trim();
+
+  const order = await Order.findById(id);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  if (order.status === "void") {
+    return res.status(400).json({ message: "Order already voided" });
+  }
+
+  order.status = "void";
+  order.voidedAt = new Date();
+  order.voidedBy = req.user?.id || null;
+  order.voidReason = reason;
+
+  await order.save();
+  res.json(order);
+}
+
+export async function salesSummary(req, res) {
+  // date range in ISO. If omitted, default to today.
+  const fromQ = req.query.from ? new Date(req.query.from) : null;
+  const toQ = req.query.to ? new Date(req.query.to) : null;
+
+  const from =
+    fromQ && !Number.isNaN(fromQ.getTime())
+      ? fromQ
+      : (() => {
+          const d = new Date();
+          d.setHours(0, 0, 0, 0);
+          return d;
+        })();
+
+  const to =
+    toQ && !Number.isNaN(toQ.getTime())
+      ? toQ
+      : (() => {
+          const d = new Date();
+          d.setHours(23, 59, 59, 999);
+          return d;
+        })();
+
+  // We exclude void orders from net sales, but also report voided stats
+  const matchBase = {
+    createdAt: { $gte: from, $lte: to },
+  };
+
+  const totals = await Order.aggregate([
+    { $match: matchBase },
+    {
+      $group: {
+        _id: "$status",
+        count: { $sum: 1 },
+        gross: { $sum: "$total" },
+      },
+    },
+  ]);
+
+  const byPayment = await Order.aggregate([
+    { $match: { ...matchBase, status: "paid" } },
+    {
+      $group: {
+        _id: "$payment.method",
+        count: { $sum: 1 },
+        total: { $sum: "$total" },
+      },
+    },
+    { $sort: { total: -1 } },
+  ]);
+
+  const paidTotals = totals.find((t) => t._id === "paid") || {
+    count: 0,
+    gross: 0,
+  };
+  const voidTotals = totals.find((t) => t._id === "void") || {
+    count: 0,
+    gross: 0,
+  };
+
+  res.json({
+    range: { from, to },
+    paid: { count: paidTotals.count, total: paidTotals.gross },
+    void: { count: voidTotals.count, total: voidTotals.gross },
+    netSales: paidTotals.gross, // paid only
+    byPayment: byPayment.map((x) => ({
+      method: x._id || "unknown",
+      count: x.count,
+      total: x.total,
+    })),
+  });
+}

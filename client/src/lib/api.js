@@ -76,6 +76,21 @@ export const api = {
       return request(`/api/orders${q ? `?${q}` : ""}`);
     },
     get: (id) => request(`/api/orders/${id}`),
+
+    summary: (params = {}) => {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === "") return;
+        qs.set(k, String(v));
+      });
+      const q = qs.toString();
+      return request(`/api/orders/summary${q ? `?${q}` : ""}`);
+    },
+    void: (id, payload) =>
+      request(`/api/orders/${id}/void`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
   },
   users: {
     list: (params = {}) => {

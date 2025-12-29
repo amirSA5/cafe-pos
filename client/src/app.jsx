@@ -12,6 +12,7 @@ import { ProductsPage } from "./pages/ProductsPage";
 import { UsersPage } from "./pages/UsersPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ReceiptPage } from "./pages/ReceiptPage";
+import { DashboardPage } from "./pages/DashboardPage";
 
 function PageShell({ children }) {
   return (
@@ -69,6 +70,10 @@ export function App() {
 
           <Guard path="/receipt/:id" roles={["admin", "cashier"]}>
             <ReceiptPage />
+          </Guard>
+
+          <Guard path="/dashboard" roles={["admin"]}>
+            <DashboardPage />
           </Guard>
         </Router>
       </PageShell>
