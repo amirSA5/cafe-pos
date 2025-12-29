@@ -1,4 +1,6 @@
 import { Link } from "preact-router/match";
+import { route } from "preact-router";
+import { getAuth, clearAuth } from "../../lib/auth";
 
 function TabLink({ href, active, children }) {
   return (
@@ -19,7 +21,15 @@ function TabLink({ href, active, children }) {
 }
 
 export function Header({ path }) {
+  const auth = getAuth();
+  const role = auth?.user?.role;
+
   const is = (p) => (path || "/") === p;
+
+  function logout() {
+    clearAuth();
+    route("/login");
+  }
 
   return (
     <header
@@ -44,22 +54,50 @@ export function Header({ path }) {
       >
         <div style={{ fontWeight: 950, fontSize: 18 }}>Café POS</div>
 
-        <nav style={{ display: "flex", gap: 8 }}>
-          <TabLink href="/" active={is("/")}>
-            Cashier
-          </TabLink>
-          <TabLink href="/orders" active={is("/orders")}>
-            Orders
-          </TabLink>
-          <TabLink href="/products" active={is("/products")}>
-            Products
-          </TabLink>
-        </nav>
+        {auth ? (
+          <nav style={{ display: "flex", gap: 8 }}>
+            <TabLink href="/" active={is("/")}>
+              Cashier
+            </TabLink>
+            {role === "admin" ? (
+              <>
+                <TabLink href="/orders" active={is("/orders")}>
+                  Orders
+                </TabLink>
+                <TabLink href="/products" active={is("/products")}>
+                  Products
+                </TabLink>
+              </>
+            ) : null}
+          </nav>
+        ) : null}
 
         <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
-          API: /api
-        </div>
+
+        {auth ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800 }}>
+              {auth.user.username} · {auth.user.role}
+            </div>
+            <button
+              onClick={logout}
+              style={{
+                padding: "8px 10px",
+                borderRadius: 12,
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                cursor: "pointer",
+                fontWeight: 900,
+              }}
+            >
+              Logout
+            </button>
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
+            API: /api
+          </div>
+        )}
       </div>
     </header>
   );

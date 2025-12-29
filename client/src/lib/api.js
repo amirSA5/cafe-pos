@@ -1,33 +1,43 @@
-async function request(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
+import { getAuth, clearAuth } from "./auth";
 
-  // Try to parse json even for errors
-  const text = await res.text();
-  const data = text ? safeJson(text) : null;
+const API_BASE = ""; // same origin, Vite proxy handles /api
+
+async function request(path, options = {}) {
+  const auth = getAuth();
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+
+  if (auth?.token) headers.Authorization = `Bearer ${auth.token}`;
+
+  const res = await fetch(API_BASE + path, { ...options, headers });
 
   if (!res.ok) {
-    const msg = data?.message || `Request failed (${res.status})`;
-    const err = new Error(msg);
-    err.status = res.status;
-    err.data = data;
-    throw err;
+    // Auto logout if token invalid
+    if (res.status === 401) clearAuth();
+
+    let msg = `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      msg = data?.message || msg;
+    } catch {}
+    throw new Error(msg);
   }
 
-  return data;
-}
-
-function safeJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { raw: text };
-  }
+  // 204 no content
+  if (res.status === 204) return null;
+  return res.json();
 }
 
 export const api = {
+  auth: {
+    login: (payload) =>
+      request("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+  },
   products: {
     list: (params = {}) => {
       const qs = new URLSearchParams();

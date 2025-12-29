@@ -1,10 +1,14 @@
 import Router from "preact-router";
-import { useState } from "preact/hooks";
+import { route } from "preact-router";
+import { useEffect, useState } from "preact/hooks";
 
 import { Header } from "./components/layout/Header";
+import { getAuth } from "./lib/auth";
+
 import { CashierPage } from "./pages/CashierPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { ProductsPage } from "./pages/ProductsPage";
+import { LoginPage } from "./pages/LoginPage";
 
 function PageShell({ children }) {
   return (
@@ -12,6 +16,20 @@ function PageShell({ children }) {
       {children}
     </main>
   );
+}
+
+function Guard({ children, roles }) {
+  const auth = getAuth();
+  const role = auth?.user?.role;
+
+  useEffect(() => {
+    if (!auth) route("/login");
+    else if (roles && !roles.includes(role)) route("/");
+  }, [auth, role, roles]);
+
+  if (!auth) return null;
+  if (roles && !roles.includes(role)) return null;
+  return children;
 }
 
 export function App() {
@@ -22,9 +40,19 @@ export function App() {
       <Header path={path} />
       <PageShell>
         <Router onChange={(e) => setPath(e.url)}>
-          <CashierPage path="/" />
-          <OrdersPage path="/orders" />
-          <ProductsPage path="/products" />
+          <LoginPage path="/login" />
+
+          <Guard path="/" roles={["admin", "cashier"]}>
+            <CashierPage path="/" />
+          </Guard>
+
+          <Guard path="/orders" roles={["admin"]}>
+            <OrdersPage path="/orders" />
+          </Guard>
+
+          <Guard path="/products" roles={["admin"]}>
+            <ProductsPage path="/products" />
+          </Guard>
         </Router>
       </PageShell>
     </div>

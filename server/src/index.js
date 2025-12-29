@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 
 import { productsRoutes } from "./routes/productsRoutes.js";
 import { ordersRoutes } from "./routes/ordersRoutes.js";
+import { authRoutes } from "./routes/authRoutes.js";
 
 dotenv.config();
 
@@ -18,6 +19,8 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "cafe-pos-api" });
 });
 
+// Auth
+app.use("/api/auth", authRoutes);
 // Products
 app.use("/api/products", productsRoutes);
 // Orders
