@@ -58,3 +58,122 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* Receipt block */
+.receipt {
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.receipt__header {
+  text-align: center;
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.receipt__title {
+  font-weight: 950;
+  letter-spacing: 1px;
+}
+
+.receipt__muted {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.receipt__divider {
+  border-top: 1px dashed #cbd5e1;
+  margin: 10px 0;
+}
+
+.receipt__section {
+  display: grid;
+  gap: 6px;
+}
+
+.receipt__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.receipt__total {
+  font-weight: 950;
+  font-size: 16px;
+}
+
+.receipt__items {
+  display: grid;
+  gap: 10px;
+}
+
+.receipt__itemTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 900;
+}
+
+.receipt__itemName {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.receipt__itemBottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.receipt__footer {
+  text-align: center;
+  margin-top: 12px;
+}
+
+/* Print rules: only receipt content */
+@media print {
+  /* Use a ticket page size (80mm thermal printers) */
+  @page {
+    size: 80mm auto;
+    margin: 6mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* Hide everything by default */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Only print the receipt area */
+  .print-area,
+  .print-area * {
+    visibility: visible !important;
+  }
+
+  /* Put receipt at the top-left of the printable page */
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+  }
+
+  /* Receipt should not look like a card when printing */
+  .receipt {
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+}

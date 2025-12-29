@@ -18,4 +18,9 @@ ordersRoutes.post(
 
 // Orders view/list: admin only (you can relax later if needed)
 ordersRoutes.get("/", authRequired, requireRole("admin"), listOrders);
-ordersRoutes.get("/:id", authRequired, requireRole("admin"), getOrder);
+ordersRoutes.get(
+  "/:id",
+  authRequired,
+  requireRole("admin", "cashier"),
+  getOrder
+);

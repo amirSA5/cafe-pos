@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Select } from "../components/ui/Select";
+import { route } from "preact-router";
 
 function money(n) {
   const v = Number(n);
@@ -161,6 +162,7 @@ export function CashierPage() {
       const created = await api.orders.checkout(payload);
       setLastReceipt(created);
       clearCart();
+      route(`/receipt/${created._id || created.id}`);
     } catch (e) {
       setCheckoutErr(e.message || "Checkout failed");
     } finally {

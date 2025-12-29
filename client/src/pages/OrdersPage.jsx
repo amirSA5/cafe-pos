@@ -5,6 +5,7 @@ import { Input } from "../components/ui/Input";
 import { Select } from "../components/ui/Select";
 import { Modal } from "../components/ui/Modal";
 import { InfoCard } from "../components/ui/InfoCard";
+import { route } from "preact-router";
 
 function money(n) {
   const v = Number(n);
@@ -192,12 +193,20 @@ export function OrdersPage() {
                   </td>
                   <td style={td}>{money(o.total)}</td>
                   <td style={td}>
-                    <Button
-                      variant="secondary"
-                      onClick={() => openDetails(o._id)}
-                    >
-                      View
-                    </Button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => openDetails(o._id)}
+                      >
+                        View
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => route(`/receipt/${o._id}`)}
+                      >
+                        Reprint
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))

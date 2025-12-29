@@ -1,6 +1,7 @@
 import Router from "preact-router";
 import { route } from "preact-router";
 import { useEffect, useState } from "preact/hooks";
+import { cloneElement } from "preact";
 
 import { Header } from "./components/layout/Header";
 import { getAuth } from "./lib/auth";
@@ -8,8 +9,9 @@ import { getAuth } from "./lib/auth";
 import { CashierPage } from "./pages/CashierPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { ProductsPage } from "./pages/ProductsPage";
-import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/UsersPage";
+import { LoginPage } from "./pages/LoginPage";
+import { ReceiptPage } from "./pages/ReceiptPage";
 
 function PageShell({ children }) {
   return (
@@ -19,7 +21,11 @@ function PageShell({ children }) {
   );
 }
 
-function Guard({ children, roles }) {
+/**
+ * Guard as a router "page" wrapper.
+ * IMPORTANT: It must pass route props (like :id) to its child page.
+ */
+function Guard({ children, roles, ...routeProps }) {
   const auth = getAuth();
   const role = auth?.user?.role;
 
@@ -30,7 +36,9 @@ function Guard({ children, roles }) {
 
   if (!auth) return null;
   if (roles && !roles.includes(role)) return null;
-  return children;
+
+  // Pass route params (e.g., id) and other router props down to the child
+  return cloneElement(children, routeProps);
 }
 
 export function App() {
@@ -44,19 +52,23 @@ export function App() {
           <LoginPage path="/login" />
 
           <Guard path="/" roles={["admin", "cashier"]}>
-            <CashierPage path="/" />
+            <CashierPage />
           </Guard>
 
           <Guard path="/orders" roles={["admin"]}>
-            <OrdersPage path="/orders" />
+            <OrdersPage />
           </Guard>
 
           <Guard path="/products" roles={["admin"]}>
-            <ProductsPage path="/products" />
+            <ProductsPage />
           </Guard>
 
           <Guard path="/users" roles={["admin"]}>
-            <UsersPage path="/users" />
+            <UsersPage />
+          </Guard>
+
+          <Guard path="/receipt/:id" roles={["admin", "cashier"]}>
+            <ReceiptPage />
           </Guard>
         </Router>
       </PageShell>
