@@ -7,6 +7,7 @@ import { productsRoutes } from "./routes/productsRoutes.js";
 import { ordersRoutes } from "./routes/ordersRoutes.js";
 import { authRoutes } from "./routes/authRoutes.js";
 import { usersRoutes } from "./routes/usersRoutes.js";
+import { stockRoutes } from "./routes/stockRoutes.js";
 
 dotenv.config();
 
@@ -28,6 +29,8 @@ app.use("/api/users", usersRoutes);
 app.use("/api/products", productsRoutes);
 // Orders
 app.use("/api/orders", ordersRoutes);
+// Stock
+app.use("/api/stock", stockRoutes);
 
 async function start() {
   const port = process.env.PORT || 4000;

@@ -115,4 +115,20 @@ export const api = {
         body: JSON.stringify(payload),
       }),
   },
+  stock: {
+    restock: (payload) =>
+      request("/api/stock/restock", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    movements: (params = {}) => {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === "") return;
+        qs.set(k, String(v));
+      });
+      const q = qs.toString();
+      return request(`/api/stock/movements${q ? `?${q}` : ""}`);
+    },
+  },
 };
