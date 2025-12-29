@@ -3,6 +3,8 @@ import cors from "cors";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 
+import { productsRoutes } from "./routes/productsRoutes.js";
+
 dotenv.config();
 
 const app = express();
@@ -14,6 +16,9 @@ app.use(express.json());
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "cafe-pos-api" });
 });
+
+// Products
+app.use("/api/products", productsRoutes);
 
 async function start() {
   const port = process.env.PORT || 4000;
