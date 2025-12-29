@@ -1,0 +1,60 @@
+:root {
+  color-scheme: light; /* prevents browser/forced dark from styling form controls */
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: #f6f7fb;
+  color: #0f172a;
+}
+
+/* Make form controls consistent across browsers */
+input,
+select,
+button,
+textarea {
+  font: inherit;
+  color: #0f172a;
+}
+
+input,
+select,
+textarea {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #111827;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.12);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid #eef0f3;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
