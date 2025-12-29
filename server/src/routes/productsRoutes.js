@@ -1,19 +1,35 @@
 import { Router } from "express";
 import { authRequired, requireRole } from "../middleware/auth.js";
-
 import {
-  listProducts,
-  getProduct,
   createProduct,
-  updateProduct,
   deleteProduct,
+  getProduct,
+  listProducts,
+  updateProduct,
 } from "../controllers/productsController.js";
 
 export const productsRoutes = Router();
-productsRoutes.use(authRequired, requireRole("admin"));
 
-productsRoutes.get("/", listProducts);
-productsRoutes.get("/:id", getProduct);
-productsRoutes.post("/", createProduct);
-productsRoutes.put("/:id", updateProduct);
-productsRoutes.delete("/:id", deleteProduct);
+// Everyone logged in can read products (needed by Cashier)
+productsRoutes.get(
+  "/",
+  authRequired,
+  requireRole("admin", "cashier"),
+  listProducts
+);
+productsRoutes.get(
+  "/:id",
+  authRequired,
+  requireRole("admin", "cashier"),
+  getProduct
+);
+
+// Only admin can modify products
+productsRoutes.post("/", authRequired, requireRole("admin"), createProduct);
+productsRoutes.put("/:id", authRequired, requireRole("admin"), updateProduct);
+productsRoutes.delete(
+  "/:id",
+  authRequired,
+  requireRole("admin"),
+  deleteProduct
+);

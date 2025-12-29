@@ -67,6 +67,9 @@ export function Header({ path }) {
                 <TabLink href="/products" active={is("/products")}>
                   Products
                 </TabLink>
+                <TabLink href="/users" active={is("/users")}>
+                  Users
+                </TabLink>
               </>
             ) : null}
           </nav>

@@ -77,4 +77,27 @@ export const api = {
     },
     get: (id) => request(`/api/orders/${id}`),
   },
+  users: {
+    list: (params = {}) => {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === "") return;
+        qs.set(k, String(v));
+      });
+      const q = qs.toString();
+      return request(`/api/users${q ? `?${q}` : ""}`);
+    },
+    create: (payload) =>
+      request("/api/users", { method: "POST", body: JSON.stringify(payload) }),
+    update: (id, payload) =>
+      request(`/api/users/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }),
+    resetPassword: (id, payload) =>
+      request(`/api/users/${id}/reset-password`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+  },
 };
