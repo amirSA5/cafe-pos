@@ -45,12 +45,34 @@ function Row({ label, value }) {
   );
 }
 
+function BackIcon() {
+  // simple inline icon (no extra libs)
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      style={{ display: "block" }}
+    >
+      <path
+        d="M15 18l-6-6 6-6"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function CashierPage() {
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsErr, setProductsErr] = useState("");
 
   const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(""); // "" means category view
   const [cart, setCart] = useState([]); // [{product, qty}]
   const [taxRate, setTaxRate] = useState("0");
   const [paidAmount, setPaidAmount] = useState("");
@@ -66,7 +88,7 @@ export function CashierPage() {
     setLoadingProducts(true);
     setProductsErr("");
     try {
-      const data = await api.products.list({ active: "true", limit: 300 });
+      const data = await api.products.list({ active: "true", limit: 500 });
       setProducts(data.items || []);
     } catch (e) {
       setProductsErr(e.message || "Failed to load products");
@@ -79,19 +101,37 @@ export function CashierPage() {
     loadProducts();
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(
-      (p) =>
-        String(p.name || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(p.category || "")
-          .toLowerCase()
-          .includes(q)
+  const categories = useMemo(() => {
+    const set = new Set(
+      products.map((p) => String(p.category || "").trim()).filter(Boolean)
     );
-  }, [products, search]);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    let list = products;
+
+    if (selectedCategory) {
+      list = list.filter(
+        (p) => String(p.category || "").trim() === selectedCategory
+      );
+    }
+
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+
+    return list.filter((p) => {
+      const name = String(p.name || "").toLowerCase();
+      const cat = String(p.category || "").toLowerCase();
+      return name.includes(q) || cat.includes(q);
+    });
+  }, [products, selectedCategory, search]);
+
+  const filteredCategories = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) => c.toLowerCase().includes(q));
+  }, [categories, search]);
 
   // Totals
   const subtotal = useMemo(
@@ -120,16 +160,6 @@ export function CashierPage() {
     return products.find((p) => String(p._id) === String(id));
   }
 
-  // Available stock for a product considering what's already in cart
-  function remainingStock(productId) {
-    const p = getProductFromList(productId);
-    const stock = Number(p?.stockQty ?? 0);
-    const inCart = cart
-      .filter((x) => String(x.product._id) === String(productId))
-      .reduce((s, x) => s + x.qty, 0);
-    return Math.max(0, stock - inCart);
-  }
-
   function addToCart(p) {
     setCheckoutErr("");
     setLastReceipt(null);
@@ -145,7 +175,6 @@ export function CashierPage() {
         const current = prev[idx];
         const nextQty = current.qty + 1;
 
-        // prevent exceeding stock
         if (nextQty > stock) return prev;
 
         const copy = prev.slice();
@@ -166,7 +195,6 @@ export function CashierPage() {
         return prev.filter((x) => x.product._id !== productId);
       }
 
-      // enforce stock max based on latest products list
       const pLatest = getProductFromList(productId);
       const stock = Number(pLatest?.stockQty ?? 0);
       const capped = Number.isFinite(stock) ? Math.min(q, stock) : q;
@@ -185,7 +213,6 @@ export function CashierPage() {
     setLastReceipt(null);
   }
 
-  // Optional: refresh products after checkout or if user wants latest stock
   async function refreshProducts() {
     await loadProducts();
   }
@@ -201,7 +228,6 @@ export function CashierPage() {
       return setCheckoutErr("Tax rate must be between 0 and 1 (e.g. 0.19).");
     }
 
-    // Client-side stock validation (server also validates)
     for (const x of cart) {
       const pLatest = getProductFromList(x.product._id) || x.product;
       const stock = Number(pLatest.stockQty ?? 0);
@@ -231,13 +257,11 @@ export function CashierPage() {
       setLastReceipt(created);
       clearCart();
 
-      // reload product stocks so cashier sees updated quantities
       await refreshProducts();
 
       route(`/receipt/${created._id || created.id}`);
     } catch (e) {
       setCheckoutErr(e.message || "Checkout failed");
-      // If server rejected due to stock, reload products to sync UI
       await refreshProducts();
     } finally {
       setCheckingOut(false);
@@ -245,6 +269,8 @@ export function CashierPage() {
   }
 
   const cartCount = useMemo(() => cart.reduce((s, x) => s + x.qty, 0), [cart]);
+
+  const isCategoryView = !selectedCategory;
 
   return (
     <section style={card}>
@@ -268,7 +294,7 @@ export function CashierPage() {
           gridTemplateColumns: "1.15fr .85fr",
         }}
       >
-        {/* LEFT: products */}
+        {/* LEFT: categories or products */}
         <div style={{ display: "grid", gap: 12 }}>
           <div
             style={{
@@ -278,12 +304,37 @@ export function CashierPage() {
             }}
           >
             <Input
-              label="Find product"
+              label={isCategoryView ? "Find category" : "Find product"}
               value={search}
               onInput={setSearch}
-              placeholder="Search name/category..."
+              placeholder={
+                isCategoryView
+                  ? "Search category..."
+                  : "Search name/category..."
+              }
             />
-            <div style={{ alignSelf: "end" }}>
+            <div style={{ alignSelf: "end", display: "flex", gap: 8 }}>
+              {!isCategoryView && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSelectedCategory("");
+                    setSearch("");
+                  }}
+                  title="Back to categories"
+                >
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <BackIcon />
+                    Back
+                  </span>
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 onClick={refreshProducts}
@@ -304,15 +355,49 @@ export function CashierPage() {
               background: "#fff",
             }}
           >
-            <div style={listHeader}>Products (click to add)</div>
+            <div style={listHeader}>
+              {isCategoryView
+                ? "Categories (click to open)"
+                : `Products — ${selectedCategory} (click to add)`}
+            </div>
 
             <div style={{ maxHeight: 460, overflow: "auto" }}>
               {loadingProducts ? (
                 <div style={{ padding: 12 }}>Loading...</div>
-              ) : filtered.length === 0 ? (
-                <div style={{ padding: 12 }}>No products.</div>
+              ) : isCategoryView ? (
+                filteredCategories.length === 0 ? (
+                  <div style={{ padding: 12 }}>No categories.</div>
+                ) : (
+                  filteredCategories.map((c) => {
+                    const count = products.filter(
+                      (p) => String(p.category || "").trim() === c
+                    ).length;
+
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => setSelectedCategory(c)}
+                        style={categoryRowBtn}
+                        title="Open category"
+                      >
+                        <div style={{ display: "grid", gap: 2 }}>
+                          <div style={{ fontWeight: 950 }}>{c}</div>
+                          <div style={{ fontSize: 12, color: "#64748b" }}>
+                            {count} product{count === 1 ? "" : "s"}
+                          </div>
+                        </div>
+
+                        <div style={{ color: "#64748b", fontWeight: 900 }}>
+                          ›
+                        </div>
+                      </button>
+                    );
+                  })
+                )
+              ) : filteredProducts.length === 0 ? (
+                <div style={{ padding: 12 }}>No products in this category.</div>
               ) : (
-                filtered.map((p) => {
+                filteredProducts.map((p) => {
                   const stock = Number(p.stockQty ?? 0);
                   const out = !Number.isFinite(stock) || stock <= 0;
 
@@ -331,8 +416,7 @@ export function CashierPage() {
                       <div>
                         <div style={{ fontWeight: 900 }}>{p.name}</div>
                         <div style={{ fontSize: 12, color: "#64748b" }}>
-                          {p.category} • Stock:{" "}
-                          {Number.isFinite(stock) ? stock : 0}
+                          Stock: {Number.isFinite(stock) ? stock : 0}
                         </div>
                       </div>
                       <div style={{ fontWeight: 950 }}>{money(p.price)}</div>
@@ -526,6 +610,18 @@ const listHeader = {
   fontWeight: 950,
   fontSize: 12,
   color: "#475569",
+};
+
+const categoryRowBtn = {
+  width: "100%",
+  textAlign: "left",
+  border: "none",
+  background: "#fff",
+  padding: 12,
+  borderTop: "1px solid #eef0f3",
+  display: "grid",
+  gridTemplateColumns: "1fr auto",
+  gap: 10,
 };
 
 const productRowBtn = {
