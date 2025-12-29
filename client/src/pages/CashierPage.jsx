@@ -51,7 +51,7 @@ export function CashierPage() {
 
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState([]); // [{product, qty}]
-
+  const [total, setTotal] = useState(0);
   const [taxRate, setTaxRate] = useState("0");
   const [paidAmount, setPaidAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
@@ -59,6 +59,8 @@ export function CashierPage() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [checkoutErr, setCheckoutErr] = useState("");
   const [lastReceipt, setLastReceipt] = useState(null);
+
+  const [paidTouched, setPaidTouched] = useState(false);
 
   async function loadProducts() {
     setLoadingProducts(true);
@@ -75,7 +77,10 @@ export function CashierPage() {
 
   useEffect(() => {
     loadProducts();
-  }, []);
+    if (!paidTouched) {
+      setPaidAmount(String(total));
+    }
+  }, [total, paidTouched]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -114,6 +119,7 @@ export function CashierPage() {
 
   function clearCart() {
     setCart([]);
+    setPaidTouched(false);
     setPaidAmount("");
     setCheckoutErr("");
     setLastReceipt(null);
@@ -128,7 +134,7 @@ export function CashierPage() {
     if (!Number.isFinite(tr) || tr < 0) return 0;
     return round2(subtotal * tr);
   }, [subtotal, taxRate]);
-  const total = useMemo(() => round2(subtotal + tax), [subtotal, tax]);
+  setTotal(useMemo(() => round2(subtotal + tax), [subtotal, tax]));
 
   async function checkout() {
     setCheckoutErr("");
@@ -317,7 +323,10 @@ export function CashierPage() {
             <Input
               label="Paid amount"
               value={paidAmount}
-              onInput={setPaidAmount}
+              onInput={(v) => {
+                setPaidTouched(true);
+                setPaidAmount(v);
+              }}
               placeholder={String(total)}
               type="number"
             />
