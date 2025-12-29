@@ -52,7 +52,6 @@ export function CashierPage() {
 
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState([]); // [{product, qty}]
-  const [total, setTotal] = useState(0);
   const [taxRate, setTaxRate] = useState("0");
   const [paidAmount, setPaidAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
@@ -78,29 +77,79 @@ export function CashierPage() {
 
   useEffect(() => {
     loadProducts();
-    if (!paidTouched) {
-      setPaidAmount(String(total));
-    }
-  }, [total, paidTouched]);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return products;
     return products.filter(
       (p) =>
-        p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)
+        String(p.name || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(p.category || "")
+          .toLowerCase()
+          .includes(q)
     );
   }, [products, search]);
+
+  // Totals
+  const subtotal = useMemo(
+    () =>
+      round2(
+        cart.reduce((s, x) => s + Number(x.product.price || 0) * x.qty, 0)
+      ),
+    [cart]
+  );
+
+  const tax = useMemo(() => {
+    const tr = Number(taxRate);
+    if (!Number.isFinite(tr) || tr < 0) return 0;
+    return round2(subtotal * tr);
+  }, [subtotal, taxRate]);
+
+  const total = useMemo(() => round2(subtotal + tax), [subtotal, tax]);
+
+  // Auto-fill paid amount with total unless cashier edited it
+  useEffect(() => {
+    if (!paidTouched) setPaidAmount(String(total));
+  }, [total, paidTouched]);
+
+  // Helpers
+  function getProductFromList(id) {
+    return products.find((p) => String(p._id) === String(id));
+  }
+
+  // Available stock for a product considering what's already in cart
+  function remainingStock(productId) {
+    const p = getProductFromList(productId);
+    const stock = Number(p?.stockQty ?? 0);
+    const inCart = cart
+      .filter((x) => String(x.product._id) === String(productId))
+      .reduce((s, x) => s + x.qty, 0);
+    return Math.max(0, stock - inCart);
+  }
 
   function addToCart(p) {
     setCheckoutErr("");
     setLastReceipt(null);
 
+    const stock = Number(p.stockQty ?? 0);
+    if (!Number.isFinite(stock) || stock <= 0) {
+      return setCheckoutErr(`"${p.name}" is out of stock.`);
+    }
+
     setCart((prev) => {
       const idx = prev.findIndex((x) => x.product._id === p._id);
       if (idx >= 0) {
+        const current = prev[idx];
+        const nextQty = current.qty + 1;
+
+        // prevent exceeding stock
+        if (nextQty > stock) return prev;
+
         const copy = prev.slice();
-        copy[idx] = { ...copy[idx], qty: copy[idx].qty + 1 };
+        copy[idx] = { ...current, qty: nextQty };
         return copy;
       }
       return [...prev, { product: p, qty: 1 }];
@@ -108,12 +157,22 @@ export function CashierPage() {
   }
 
   function setQty(productId, qty) {
+    setCheckoutErr("");
+    setLastReceipt(null);
+
     setCart((prev) => {
       const q = parseInt(qty || "0", 10);
-      if (!Number.isFinite(q) || q < 1)
+      if (!Number.isFinite(q) || q < 1) {
         return prev.filter((x) => x.product._id !== productId);
+      }
+
+      // enforce stock max based on latest products list
+      const pLatest = getProductFromList(productId);
+      const stock = Number(pLatest?.stockQty ?? 0);
+      const capped = Number.isFinite(stock) ? Math.min(q, stock) : q;
+
       return prev.map((x) =>
-        x.product._id === productId ? { ...x, qty: q } : x
+        x.product._id === productId ? { ...x, qty: capped } : x
       );
     });
   }
@@ -126,16 +185,10 @@ export function CashierPage() {
     setLastReceipt(null);
   }
 
-  const subtotal = useMemo(
-    () => round2(cart.reduce((s, x) => s + x.product.price * x.qty, 0)),
-    [cart]
-  );
-  const tax = useMemo(() => {
-    const tr = Number(taxRate);
-    if (!Number.isFinite(tr) || tr < 0) return 0;
-    return round2(subtotal * tr);
-  }, [subtotal, taxRate]);
-  setTotal(useMemo(() => round2(subtotal + tax), [subtotal, tax]));
+  // Optional: refresh products after checkout or if user wants latest stock
+  async function refreshProducts() {
+    await loadProducts();
+  }
 
   async function checkout() {
     setCheckoutErr("");
@@ -144,12 +197,25 @@ export function CashierPage() {
     if (cart.length === 0) return setCheckoutErr("Cart is empty.");
 
     const tr = Number(taxRate);
-    if (!Number.isFinite(tr) || tr < 0 || tr > 1)
+    if (!Number.isFinite(tr) || tr < 0 || tr > 1) {
       return setCheckoutErr("Tax rate must be between 0 and 1 (e.g. 0.19).");
+    }
+
+    // Client-side stock validation (server also validates)
+    for (const x of cart) {
+      const pLatest = getProductFromList(x.product._id) || x.product;
+      const stock = Number(pLatest.stockQty ?? 0);
+      if (!Number.isFinite(stock) || stock < x.qty) {
+        return setCheckoutErr(
+          `Insufficient stock for ${pLatest.name} (have ${stock}, need ${x.qty}).`
+        );
+      }
+    }
 
     const paid = paidAmount === "" ? NaN : Number(paidAmount);
-    if (!Number.isFinite(paid) || paid < total)
+    if (!Number.isFinite(paid) || paid < total) {
       return setCheckoutErr("Paid amount must be a number and >= total.");
+    }
 
     setCheckingOut(true);
     try {
@@ -159,16 +225,26 @@ export function CashierPage() {
         payment: { method: payMethod, paidAmount: paid },
         note: "",
       };
+
       const created = await api.orders.checkout(payload);
+
       setLastReceipt(created);
       clearCart();
+
+      // reload product stocks so cashier sees updated quantities
+      await refreshProducts();
+
       route(`/receipt/${created._id || created.id}`);
     } catch (e) {
       setCheckoutErr(e.message || "Checkout failed");
+      // If server rejected due to stock, reload products to sync UI
+      await refreshProducts();
     } finally {
       setCheckingOut(false);
     }
   }
+
+  const cartCount = useMemo(() => cart.reduce((s, x) => s + x.qty, 0), [cart]);
 
   return (
     <section style={card}>
@@ -181,7 +257,7 @@ export function CashierPage() {
       >
         <div style={{ fontWeight: 950, fontSize: 16 }}>Cashier</div>
         <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700 }}>
-          Items in cart: <b>{cart.reduce((s, x) => s + x.qty, 0)}</b>
+          Items in cart: <b>{cartCount}</b>
         </div>
       </div>
 
@@ -192,13 +268,32 @@ export function CashierPage() {
           gridTemplateColumns: "1.15fr .85fr",
         }}
       >
+        {/* LEFT: products */}
         <div style={{ display: "grid", gap: 12 }}>
-          <Input
-            label="Find product"
-            value={search}
-            onInput={setSearch}
-            placeholder="Search name/category..."
-          />
+          <div
+            style={{
+              display: "grid",
+              gap: 12,
+              gridTemplateColumns: "1fr auto",
+            }}
+          >
+            <Input
+              label="Find product"
+              value={search}
+              onInput={setSearch}
+              placeholder="Search name/category..."
+            />
+            <div style={{ alignSelf: "end" }}>
+              <Button
+                variant="secondary"
+                onClick={refreshProducts}
+                disabled={loadingProducts}
+              >
+                {loadingProducts ? "Loading..." : "Refresh"}
+              </Button>
+            </div>
+          </div>
+
           {productsErr && <ErrorBox>{productsErr}</ErrorBox>}
 
           <div
@@ -217,26 +312,39 @@ export function CashierPage() {
               ) : filtered.length === 0 ? (
                 <div style={{ padding: 12 }}>No products.</div>
               ) : (
-                filtered.map((p) => (
-                  <button
-                    key={p._id}
-                    onClick={() => addToCart(p)}
-                    style={productRowBtn}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 900 }}>{p.name}</div>
-                      <div style={{ fontSize: 12, color: "#64748b" }}>
-                        {p.category}
+                filtered.map((p) => {
+                  const stock = Number(p.stockQty ?? 0);
+                  const out = !Number.isFinite(stock) || stock <= 0;
+
+                  return (
+                    <button
+                      key={p._id}
+                      onClick={() => addToCart(p)}
+                      style={{
+                        ...productRowBtn,
+                        opacity: out ? 0.55 : 1,
+                        cursor: out ? "not-allowed" : "pointer",
+                      }}
+                      disabled={out}
+                      title={out ? "Out of stock" : "Add to cart"}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 900 }}>{p.name}</div>
+                        <div style={{ fontSize: 12, color: "#64748b" }}>
+                          {p.category} • Stock:{" "}
+                          {Number.isFinite(stock) ? stock : 0}
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ fontWeight: 950 }}>{money(p.price)}</div>
-                  </button>
-                ))
+                      <div style={{ fontWeight: 950 }}>{money(p.price)}</div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>
         </div>
 
+        {/* RIGHT: cart + payment */}
         <div style={{ display: "grid", gap: 12 }}>
           <div
             style={{
@@ -252,36 +360,48 @@ export function CashierPage() {
               {cart.length === 0 ? (
                 <div style={{ color: "#64748b" }}>No items yet.</div>
               ) : (
-                cart.map((x) => (
-                  <div
-                    key={x.product._id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 90px 95px",
-                      gap: 10,
-                      alignItems: "center",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 900 }}>{x.product.name}</div>
-                      <div style={{ fontSize: 12, color: "#64748b" }}>
-                        {money(x.product.price)} each
+                cart.map((x) => {
+                  const pLatest =
+                    getProductFromList(x.product._id) || x.product;
+                  const stock = Number(pLatest.stockQty ?? 0);
+
+                  return (
+                    <div
+                      key={x.product._id}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 90px 95px",
+                        gap: 10,
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 900 }}>{x.product.name}</div>
+                        <div style={{ fontSize: 12, color: "#64748b" }}>
+                          {money(x.product.price)} each • Stock:{" "}
+                          {Number.isFinite(stock) ? stock : 0}
+                        </div>
+                      </div>
+
+                      <input
+                        value={String(x.qty)}
+                        onInput={(e) => setQty(x.product._id, e.target.value)}
+                        type="number"
+                        min="1"
+                        max={Number.isFinite(stock) ? String(stock) : undefined}
+                        style={{
+                          borderRadius: 12,
+                          padding: "10px 12px",
+                          border: "1px solid #e5e7eb",
+                        }}
+                      />
+
+                      <div style={{ fontWeight: 950, textAlign: "right" }}>
+                        {money(Number(x.product.price || 0) * x.qty)}
                       </div>
                     </div>
-
-                    <input
-                      value={String(x.qty)}
-                      onInput={(e) => setQty(x.product._id, e.target.value)}
-                      type="number"
-                      min="1"
-                      style={{ borderRadius: 12, padding: "10px 12px" }}
-                    />
-
-                    <div style={{ fontWeight: 950, textAlign: "right" }}>
-                      {money(x.product.price * x.qty)}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -414,7 +534,6 @@ const productRowBtn = {
   border: "none",
   background: "#fff",
   padding: 12,
-  cursor: "pointer",
   borderTop: "1px solid #eef0f3",
   display: "grid",
   gridTemplateColumns: "1fr auto",

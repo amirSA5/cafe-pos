@@ -10,8 +10,15 @@ const orderItemSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     category: { type: String, required: true, trim: true },
     price: { type: Number, required: true, min: 0 },
+
+    // NEW: snapshot unit cost at sale time (COGS)
+    cost: { type: Number, default: 0, min: 0 },
+
     qty: { type: Number, required: true, min: 1 },
     lineTotal: { type: Number, required: true, min: 0 },
+
+    // NEW: line cost (cost * qty)
+    lineCost: { type: Number, default: 0, min: 0 },
   },
   { _id: false }
 );
@@ -49,9 +56,20 @@ const orderSchema = new mongoose.Schema(
     taxAmount: { type: Number, required: true, min: 0 },
     total: { type: Number, required: true, min: 0 },
 
+    // NEW: COGS totals + profit
+    totalCost: { type: Number, default: 0, min: 0 },
+    profit: { type: Number, default: 0 },
+
     payment: { type: paymentSchema, required: true },
 
     note: { type: String, trim: true, default: "" },
+
+    // NEW: who created the order (cashier/admin)
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true }
 );

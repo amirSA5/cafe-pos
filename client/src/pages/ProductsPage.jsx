@@ -12,6 +12,11 @@ function money(n) {
   return v.toFixed(2);
 }
 
+function numOrNaN(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : NaN;
+}
+
 function ErrorBox({ children }) {
   return (
     <div
@@ -37,6 +42,17 @@ function ProductForm({ initial, onCancel, onSave }) {
   const [sku, setSku] = useState(initial?.sku || "");
   const [active, setActive] = useState(initial?.active ?? true);
 
+  // NEW: inventory + cost fields
+  const [cost, setCost] = useState(
+    initial?.cost != null ? String(initial.cost) : "0"
+  );
+  const [stockQty, setStockQty] = useState(
+    initial?.stockQty != null ? String(initial.stockQty) : "0"
+  );
+  const [lowStockThreshold, setLowStockThreshold] = useState(
+    initial?.lowStockThreshold != null ? String(initial.lowStockThreshold) : "0"
+  );
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,11 +60,21 @@ function ProductForm({ initial, onCancel, onSave }) {
     e.preventDefault();
     setError("");
 
-    const p = Number(price);
+    const p = numOrNaN(price);
+    const c = numOrNaN(cost);
+    const s = numOrNaN(stockQty);
+    const l = numOrNaN(lowStockThreshold);
+
     if (!name.trim() || !category.trim())
       return setError("Name and category are required.");
     if (!Number.isFinite(p) || p < 0)
       return setError("Price must be a non-negative number.");
+    if (!Number.isFinite(c) || c < 0)
+      return setError("Cost must be a non-negative number.");
+    if (!Number.isFinite(s) || s < 0)
+      return setError("Stock qty must be a non-negative number.");
+    if (!Number.isFinite(l) || l < 0)
+      return setError("Low-stock threshold must be a non-negative number.");
 
     setSaving(true);
     try {
@@ -58,6 +84,10 @@ function ProductForm({ initial, onCancel, onSave }) {
         price: p,
         sku: sku.trim(),
         active: Boolean(active),
+
+        cost: c,
+        stockQty: s,
+        lowStockThreshold: l,
       });
     } catch (err) {
       setError(err.message || "Failed to save.");
@@ -101,6 +131,32 @@ function ProductForm({ initial, onCancel, onSave }) {
         />
       </div>
 
+      <div
+        style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}
+      >
+        <Input
+          label="Cost"
+          value={cost}
+          onInput={setCost}
+          placeholder="0"
+          type="number"
+        />
+        <Input
+          label="Stock qty"
+          value={stockQty}
+          onInput={setStockQty}
+          placeholder="0"
+          type="number"
+        />
+        <Input
+          label="Low-stock threshold"
+          value={lowStockThreshold}
+          onInput={setLowStockThreshold}
+          placeholder="0"
+          type="number"
+        />
+      </div>
+
       <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <input
           type="checkbox"
@@ -136,7 +192,7 @@ export function ProductsPage() {
   const [editing, setEditing] = useState(null);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleting, setDeleting] = useState(null); // product to delete
+  const [deleting, setDeleting] = useState(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
 
   const categories = useMemo(() => {
@@ -168,17 +224,6 @@ export function ProductsPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function onDelete(p) {
-    const ok = confirm(`Delete "${p.name}"?`);
-    if (!ok) return;
-    try {
-      await api.products.remove(p._id);
-      await load();
-    } catch (e) {
-      alert(e.message || "Delete failed");
-    }
-  }
 
   async function onSave(payload) {
     if (editing?._id) await api.products.update(editing._id, payload);
@@ -293,6 +338,9 @@ export function ProductsPage() {
               <th style={th}>Name</th>
               <th style={th}>Category</th>
               <th style={th}>Price</th>
+              <th style={th}>Cost</th>
+              <th style={th}>Stock</th>
+              <th style={th}>Low</th>
               <th style={th}>SKU</th>
               <th style={th}>Active</th>
               <th style={{ ...th, width: 220 }}>Actions</th>
@@ -301,42 +349,59 @@ export function ProductsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td style={td} colSpan={6}>
+                <td style={td} colSpan={9}>
                   Loading...
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td style={td} colSpan={6}>
+                <td style={td} colSpan={9}>
                   No products found.
                 </td>
               </tr>
             ) : (
-              items.map((p) => (
-                <tr key={p._id}>
-                  <td style={td}>{p.name}</td>
-                  <td style={td}>{p.category}</td>
-                  <td style={td}>{money(p.price)}</td>
-                  <td style={td}>{p.sku || "-"}</td>
-                  <td style={td}>{p.active ? "Yes" : "No"}</td>
-                  <td style={td}>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          setEditing(p);
-                          setModalOpen(true);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button variant="danger" onClick={() => onAskDelete(p)}>
-                        Delete
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+              items.map((p) => {
+                const low =
+                  Number(p.lowStockThreshold || 0) > 0 &&
+                  Number(p.stockQty || 0) <= Number(p.lowStockThreshold || 0);
+
+                return (
+                  <tr key={p._id}>
+                    <td style={td}>{p.name}</td>
+                    <td style={td}>{p.category}</td>
+                    <td style={td}>{money(p.price)}</td>
+                    <td style={td}>{money(p.cost ?? 0)}</td>
+                    <td
+                      style={{
+                        ...td,
+                        color: low ? "#b00020" : td.color,
+                        fontWeight: low ? 950 : 700,
+                      }}
+                    >
+                      {p.stockQty ?? 0}
+                    </td>
+                    <td style={td}>{p.lowStockThreshold ?? 0}</td>
+                    <td style={td}>{p.sku || "-"}</td>
+                    <td style={td}>{p.active ? "Yes" : "No"}</td>
+                    <td style={td}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setEditing(p);
+                            setModalOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button variant="danger" onClick={() => onAskDelete(p)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

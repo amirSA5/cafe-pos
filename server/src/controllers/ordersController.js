@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Order } from "../models/Order.js";
 import { Product } from "../models/Product.js";
 
@@ -95,7 +96,7 @@ export async function checkout(req, res) {
     return res.status(400).json({ message: "taxRate must be between 0 and 1" });
   }
 
-  // Load products
+  // Load products (include stock + cost)
   const ids = inputItems.map((i) => i.productId).filter(Boolean);
   const products = await Product.find({
     _id: { $in: ids },
@@ -108,28 +109,47 @@ export async function checkout(req, res) {
     const p = byId.get(String(i.productId));
     const qty = parseInt(i.qty || "0", 10);
 
-    if (!p)
+    if (!p) {
       return res
         .status(400)
         .json({ message: "Some products not found or inactive" });
-    if (!Number.isFinite(qty) || qty < 1)
+    }
+    if (!Number.isFinite(qty) || qty < 1) {
       return res.status(400).json({ message: "qty must be >= 1" });
+    }
 
-    const lineTotal = round2(p.price * qty);
+    const stockQty = Number(p.stockQty ?? 0);
+    if (!Number.isFinite(stockQty) || stockQty < qty) {
+      return res.status(400).json({
+        message: `Insufficient stock for ${p.name} (have ${stockQty}, need ${qty})`,
+      });
+    }
+
+    const price = Number(p.price ?? 0);
+    const cost = Number(p.cost ?? 0);
+
+    const lineTotal = round2(price * qty);
+    const lineCost = round2(cost * qty);
 
     items.push({
       productId: p._id,
       name: p.name,
       category: p.category,
-      price: p.price,
+      price,
+      cost, // snapshot unit cost at sale time
       qty,
       lineTotal,
+      lineCost,
     });
   }
 
   const subtotal = round2(items.reduce((s, it) => s + it.lineTotal, 0));
   const taxAmount = round2(subtotal * taxRate);
   const total = round2(subtotal + taxAmount);
+
+  const totalCost = round2(items.reduce((s, it) => s + (it.lineCost || 0), 0));
+  const revenueExclTax = round2(total - taxAmount);
+  const profit = round2(revenueExclTax - totalCost);
 
   const paidAmount = Number(payment.paidAmount ?? 0);
   if (!Number.isFinite(paidAmount) || paidAmount < total) {
@@ -143,6 +163,19 @@ export async function checkout(req, res) {
 
   const number = await generateOrderNumber();
 
+  // Decrement stock (simple approach; later we can make it transactional)
+  for (const it of items) {
+    const resUpdate = await Product.updateOne(
+      { _id: it.productId, stockQty: { $gte: it.qty } },
+      { $inc: { stockQty: -it.qty } }
+    );
+    if (resUpdate.modifiedCount !== 1) {
+      return res
+        .status(409)
+        .json({ message: `Stock update failed for ${it.name}` });
+    }
+  }
+
   const created = await Order.create({
     number,
     status: "paid",
@@ -151,8 +184,14 @@ export async function checkout(req, res) {
     taxRate,
     taxAmount,
     total,
+
+    // new totals
+    totalCost,
+    profit,
+
     payment: { method, paidAmount: round2(paidAmount), change },
     note,
+    createdBy: req.user?.id || null,
   });
 
   res.status(201).json(created);
@@ -201,11 +240,11 @@ export async function salesSummary(req, res) {
           return d;
         })();
 
-  // We exclude void orders from net sales, but also report voided stats
   const matchBase = {
     createdAt: { $gte: from, $lte: to },
   };
 
+  // Totals by status (paid/void)
   const totals = await Order.aggregate([
     { $match: matchBase },
     {
@@ -217,6 +256,34 @@ export async function salesSummary(req, res) {
     },
   ]);
 
+  const paidTotals = totals.find((t) => t._id === "paid") || {
+    count: 0,
+    gross: 0,
+  };
+  const voidTotals = totals.find((t) => t._id === "void") || {
+    count: 0,
+    gross: 0,
+  };
+
+  // Paid aggregates for revenue/tax/cogs/profit
+  const paidAgg = await Order.aggregate([
+    { $match: { ...matchBase, status: "paid" } },
+    {
+      $group: {
+        _id: null,
+        revenue: { $sum: "$total" },
+        tax: { $sum: "$taxAmount" },
+        cogs: { $sum: "$totalCost" },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const paidRow = paidAgg[0] || { revenue: 0, tax: 0, cogs: 0, count: 0 };
+  const revenueExclTax = paidRow.revenue - paidRow.tax;
+  const profit = revenueExclTax - paidRow.cogs;
+
+  // By payment method (paid only)
   const byPayment = await Order.aggregate([
     { $match: { ...matchBase, status: "paid" } },
     {
@@ -229,24 +296,35 @@ export async function salesSummary(req, res) {
     { $sort: { total: -1 } },
   ]);
 
-  const paidTotals = totals.find((t) => t._id === "paid") || {
-    count: 0,
-    gross: 0,
-  };
-  const voidTotals = totals.find((t) => t._id === "void") || {
-    count: 0,
-    gross: 0,
-  };
+  // Low stock list (active only, threshold > 0, stock <= threshold)
+  const lowStock = await Product.find({
+    active: true,
+    lowStockThreshold: { $gt: 0 },
+    $expr: { $lte: ["$stockQty", "$lowStockThreshold"] },
+  })
+    .sort({ stockQty: 1 })
+    .limit(50)
+    .select("name category stockQty lowStockThreshold");
 
   res.json({
     range: { from, to },
+
     paid: { count: paidTotals.count, total: paidTotals.gross },
     void: { count: voidTotals.count, total: voidTotals.gross },
-    netSales: paidTotals.gross, // paid only
+
+    netSales: paidRow.revenue, // paid only
+
+    revenueExclTax,
+    tax: paidRow.tax,
+    cogs: paidRow.cogs,
+    profit: Math.round(profit * 100) / 100,
+
     byPayment: byPayment.map((x) => ({
       method: x._id || "unknown",
       count: x.count,
       total: x.total,
     })),
+
+    lowStock,
   });
 }

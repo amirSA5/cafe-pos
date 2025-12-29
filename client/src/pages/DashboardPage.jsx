@@ -29,9 +29,11 @@ export function DashboardPage() {
     setErr("");
     try {
       const fromISO = from ? new Date(from).toISOString() : "";
+
       const toD = new Date(to);
       toD.setHours(23, 59, 59, 999);
       const toISO = to ? toD.toISOString() : "";
+
       const res = await api.orders.summary({ from: fromISO, to: toISO });
       setData(res);
     } catch (e) {
@@ -99,9 +101,25 @@ export function DashboardPage() {
               gridTemplateColumns: "repeat(4, 1fr)",
             }}
           >
-            <InfoCard label="Net sales" value={money(data.netSales)} />
+            <InfoCard label="Revenue (incl tax)" value={money(data.netSales)} />
+            <InfoCard
+              label="Revenue (excl tax)"
+              value={money(data.revenueExclTax)}
+            />
+            <InfoCard label="COGS" value={money(data.cogs)} />
+            <InfoCard label="Profit" value={money(data.profit)} />
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gap: 12,
+              gridTemplateColumns: "repeat(4, 1fr)",
+            }}
+          >
             <InfoCard label="Paid orders" value={data.paid?.count ?? 0} />
             <InfoCard label="Void orders" value={data.void?.count ?? 0} />
+            <InfoCard label="Tax total" value={money(data.tax ?? 0)} />
             <InfoCard
               label="Void amount"
               value={money(data.void?.total ?? 0)}
@@ -148,6 +166,59 @@ export function DashboardPage() {
                   <tr>
                     <td style={td} colSpan={3}>
                       No data.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div
+            style={{
+              border: "1px solid #eef0f3",
+              borderRadius: 14,
+              background: "#fff",
+              overflowX: "auto",
+            }}
+          >
+            <div
+              style={{
+                padding: "10px 12px",
+                background: "#f8fafc",
+                fontSize: 12,
+                fontWeight: 950,
+                color: "#475569",
+              }}
+            >
+              Low stock
+            </div>
+            <table>
+              <thead>
+                <tr style={{ background: "#fff" }}>
+                  <th style={th}>Product</th>
+                  <th style={th}>Category</th>
+                  <th style={th}>Stock</th>
+                  <th style={th}>Threshold</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.lowStock?.length ? (
+                  data.lowStock.map((p) => (
+                    <tr key={p._id}>
+                      <td style={td}>
+                        <b>{p.name}</b>
+                      </td>
+                      <td style={td}>{p.category}</td>
+                      <td style={{ ...td, color: "#b00020", fontWeight: 950 }}>
+                        {p.stockQty}
+                      </td>
+                      <td style={td}>{p.lowStockThreshold}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td style={td} colSpan={4}>
+                      No low-stock items.
                     </td>
                   </tr>
                 )}

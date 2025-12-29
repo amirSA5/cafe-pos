@@ -48,7 +48,18 @@ export async function getProduct(req, res) {
 
 // POST /api/products
 export async function createProduct(req, res) {
-  const { name, category, price, sku = "", active = true } = req.body || {};
+  const {
+    name,
+    category,
+    price,
+    sku = "",
+    active = true,
+
+    // new fields
+    cost = 0,
+    stockQty = 0,
+    lowStockThreshold = 0,
+  } = req.body || {};
 
   if (!name || !category) {
     return res.status(400).json({ message: "name and category are required" });
@@ -61,12 +72,37 @@ export async function createProduct(req, res) {
       .json({ message: "price must be a non-negative number" });
   }
 
+  const c = parseNumber(cost, 0);
+  if (!Number.isFinite(c) || c < 0) {
+    return res
+      .status(400)
+      .json({ message: "cost must be a non-negative number" });
+  }
+
+  const s = parseNumber(stockQty, 0);
+  if (!Number.isFinite(s) || s < 0) {
+    return res
+      .status(400)
+      .json({ message: "stockQty must be a non-negative number" });
+  }
+
+  const l = parseNumber(lowStockThreshold, 0);
+  if (!Number.isFinite(l) || l < 0) {
+    return res
+      .status(400)
+      .json({ message: "lowStockThreshold must be a non-negative number" });
+  }
+
   const created = await Product.create({
     name: String(name).trim(),
     category: String(category).trim(),
     price: p,
     sku: String(sku || "").trim(),
     active: Boolean(active),
+
+    cost: c,
+    stockQty: s,
+    lowStockThreshold: l,
   });
 
   res.status(201).json(created);
@@ -77,6 +113,7 @@ export async function updateProduct(req, res) {
   const { id } = req.params;
   const payload = req.body || {};
 
+  // price
   if ("price" in payload) {
     const p = parseNumber(payload.price, NaN);
     if (!Number.isFinite(p) || p < 0) {
@@ -85,6 +122,39 @@ export async function updateProduct(req, res) {
         .json({ message: "price must be a non-negative number" });
     }
     payload.price = p;
+  }
+
+  // new: cost
+  if ("cost" in payload) {
+    const c = parseNumber(payload.cost, NaN);
+    if (!Number.isFinite(c) || c < 0) {
+      return res
+        .status(400)
+        .json({ message: "cost must be a non-negative number" });
+    }
+    payload.cost = c;
+  }
+
+  // new: stockQty
+  if ("stockQty" in payload) {
+    const s = parseNumber(payload.stockQty, NaN);
+    if (!Number.isFinite(s) || s < 0) {
+      return res
+        .status(400)
+        .json({ message: "stockQty must be a non-negative number" });
+    }
+    payload.stockQty = s;
+  }
+
+  // new: lowStockThreshold
+  if ("lowStockThreshold" in payload) {
+    const l = parseNumber(payload.lowStockThreshold, NaN);
+    if (!Number.isFinite(l) || l < 0) {
+      return res
+        .status(400)
+        .json({ message: "lowStockThreshold must be a non-negative number" });
+    }
+    payload.lowStockThreshold = l;
   }
 
   if ("name" in payload) payload.name = String(payload.name || "").trim();

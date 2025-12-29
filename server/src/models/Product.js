@@ -7,6 +7,11 @@ const productSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     sku: { type: String, trim: true, maxlength: 64, default: "" },
     active: { type: Boolean, default: true },
+
+    // Inventory + COGS
+    cost: { type: Number, default: 0, min: 0 }, // cost per unit
+    stockQty: { type: Number, default: 0, min: 0 }, // current stock
+    lowStockThreshold: { type: Number, default: 0, min: 0 }, // alert threshold
   },
   { timestamps: true }
 );
