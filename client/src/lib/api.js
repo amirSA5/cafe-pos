@@ -65,5 +65,6 @@ export const api = {
       const q = qs.toString();
       return request(`/api/orders${q ? `?${q}` : ""}`);
     },
+    get: (id) => request(`/api/orders/${id}`),
   },
 };

@@ -11,6 +11,16 @@ function round2(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 }
 
+function formatDT(iso) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso || "");
+    return d.toLocaleString();
+  } catch {
+    return String(iso || "");
+  }
+}
+
 function Button({
   children,
   onClick,
@@ -112,7 +122,7 @@ function Modal({ open, title, children, onClose }) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "min(720px, 100%)",
+          width: "min(860px, 100%)",
           background: "#fff",
           borderRadius: 16,
           border: "1px solid #eee",
@@ -149,7 +159,7 @@ function Modal({ open, title, children, onClose }) {
   );
 }
 
-/* ----------------------- Products Admin (same as Step 3) ----------------------- */
+/* ----------------------- Products Admin (same as before) ----------------------- */
 
 function ProductForm({ initial, onCancel, onSave }) {
   const [name, setName] = useState(initial?.name || "");
@@ -195,18 +205,7 @@ function ProductForm({ initial, onCancel, onSave }) {
 
   return (
     <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
-      {error && (
-        <div
-          style={{
-            padding: 12,
-            border: "1px solid #f2c2c2",
-            borderRadius: 12,
-            color: "#b00020",
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error && <div style={errorBox}>{error}</div>}
 
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
         <Input
@@ -493,7 +492,7 @@ function Cashier() {
 
   const [search, setSearch] = useState("");
 
-  const [cart, setCart] = useState([]); // [{product, qty}]
+  const [cart, setCart] = useState([]);
   const [taxRate, setTaxRate] = useState("0.19");
   const [paidAmount, setPaidAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
@@ -567,11 +566,7 @@ function Cashier() {
   }
 
   const subtotal = useMemo(() => {
-    return round2(
-      cart.reduce((s, x) => {
-        return s + x.product.price * x.qty;
-      }, 0)
-    );
+    return round2(cart.reduce((s, x) => s + x.product.price * x.qty, 0));
   }, [cart]);
 
   const tax = useMemo(() => {
@@ -640,7 +635,6 @@ function Cashier() {
       <div
         style={{ display: "grid", gridTemplateColumns: "1.2fr .8fr", gap: 14 }}
       >
-        {/* Left: products */}
         <div style={{ display: "grid", gap: 12 }}>
           <Input
             label="Find product"
@@ -648,7 +642,6 @@ function Cashier() {
             onInput={setSearch}
             placeholder="Search name/category..."
           />
-
           {productsErr && <div style={errorBox}>{productsErr}</div>}
 
           <div
@@ -658,17 +651,7 @@ function Cashier() {
               overflow: "hidden",
             }}
           >
-            <div
-              style={{
-                background: "#fbfbfb",
-                padding: "10px 12px",
-                fontWeight: 800,
-                fontSize: 12,
-                color: "#555",
-              }}
-            >
-              Products (click to add)
-            </div>
+            <div style={listHeader}>Products (click to add)</div>
 
             <div style={{ maxHeight: 420, overflow: "auto" }}>
               {loadingProducts ? (
@@ -680,18 +663,7 @@ function Cashier() {
                   <button
                     key={p._id}
                     onClick={() => addToCart(p)}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      border: "none",
-                      background: "#fff",
-                      padding: 12,
-                      cursor: "pointer",
-                      borderTop: "1px solid #eee",
-                      display: "grid",
-                      gridTemplateColumns: "1fr auto",
-                      gap: 10,
-                    }}
+                    style={productRowBtn}
                   >
                     <div>
                       <div style={{ fontWeight: 800 }}>{p.name}</div>
@@ -707,7 +679,6 @@ function Cashier() {
           </div>
         </div>
 
-        {/* Right: cart */}
         <div style={{ display: "grid", gap: 12 }}>
           <div
             style={{
@@ -716,17 +687,7 @@ function Cashier() {
               overflow: "hidden",
             }}
           >
-            <div
-              style={{
-                background: "#fbfbfb",
-                padding: "10px 12px",
-                fontWeight: 800,
-                fontSize: 12,
-                color: "#555",
-              }}
-            >
-              Cart
-            </div>
+            <div style={listHeader}>Cart</div>
 
             <div style={{ padding: 12, display: "grid", gap: 10 }}>
               {cart.length === 0 ? (
@@ -754,12 +715,7 @@ function Cashier() {
                       onInput={(e) => setQty(x.product._id, e.target.value)}
                       type="number"
                       min="1"
-                      style={{
-                        padding: "10px 12px",
-                        borderRadius: 10,
-                        border: "1px solid #ddd",
-                        outline: "none",
-                      }}
+                      style={qtyInput}
                     />
 
                     <div style={{ fontWeight: 900, textAlign: "right" }}>
@@ -887,6 +843,284 @@ function Row({ label, value }) {
   );
 }
 
+/* ------------------------------ Orders History ------------------------------ */
+
+function startOfTodayISO() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+function OrdersHistory() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  const [status, setStatus] = useState(""); // "", "paid", "open", "void"
+  const [from, setFrom] = useState(startOfTodayISO().slice(0, 10)); // yyyy-mm-dd
+  const [to, setTo] = useState(""); // yyyy-mm-dd
+
+  const [selectedId, setSelectedId] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [details, setDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsErr, setDetailsErr] = useState("");
+
+  async function load() {
+    setLoading(true);
+    setErr("");
+    try {
+      const params = { status, page: 1, limit: 50 };
+      if (from) params.from = new Date(from).toISOString();
+      if (to) {
+        const d = new Date(to);
+        d.setHours(23, 59, 59, 999);
+        params.to = d.toISOString();
+      }
+
+      const data = await api.orders.list(params);
+      setItems(data.items || []);
+    } catch (e) {
+      setErr(e.message || "Failed to load orders");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function openDetails(id) {
+    setSelectedId(id);
+    setDetailsOpen(true);
+    setDetails(null);
+    setDetailsErr("");
+    setDetailsLoading(true);
+
+    try {
+      const d = await api.orders.get(id);
+      setDetails(d);
+    } catch (e) {
+      setDetailsErr(e.message || "Failed to load order");
+    } finally {
+      setDetailsLoading(false);
+    }
+  }
+
+  const totalSum = useMemo(() => {
+    return round2(items.reduce((s, o) => s + (Number(o.total) || 0), 0));
+  }, [items]);
+
+  return (
+    <section style={card}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ fontWeight: 900, fontSize: 16 }}>Orders</div>
+        <div style={{ color: "#555", fontSize: 13 }}>
+          Count: <b>{items.length}</b> — Sum: <b>{money(totalSum)}</b>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gap: 12,
+          gridTemplateColumns: "1fr 1fr 1fr auto",
+        }}
+      >
+        <Select
+          label="Status"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: "", label: "All" },
+            { value: "paid", label: "Paid" },
+            { value: "open", label: "Open" },
+            { value: "void", label: "Void" },
+          ]}
+        />
+
+        <Input label="From (date)" value={from} onInput={setFrom} type="date" />
+        <Input label="To (date)" value={to} onInput={setTo} type="date" />
+
+        <div style={{ alignSelf: "end" }}>
+          <Button variant="secondary" onClick={load} disabled={loading}>
+            {loading ? "Loading..." : "Apply"}
+          </Button>
+        </div>
+      </div>
+
+      {err && <div style={errorBox}>{err}</div>}
+
+      <div
+        style={{
+          overflowX: "auto",
+          border: "1px solid #eee",
+          borderRadius: 14,
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            background: "#fff",
+          }}
+        >
+          <thead>
+            <tr style={{ background: "#fbfbfb" }}>
+              <th style={th}>Number</th>
+              <th style={th}>Date</th>
+              <th style={th}>Status</th>
+              <th style={th}>Items</th>
+              <th style={th}>Total</th>
+              <th style={{ ...th, width: 160 }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td style={td} colSpan={6}>
+                  Loading...
+                </td>
+              </tr>
+            ) : items.length === 0 ? (
+              <tr>
+                <td style={td} colSpan={6}>
+                  No orders.
+                </td>
+              </tr>
+            ) : (
+              items.map((o) => (
+                <tr key={o._id} style={{ borderTop: "1px solid #eee" }}>
+                  <td style={td}>
+                    <b>{o.number}</b>
+                  </td>
+                  <td style={td}>{formatDT(o.createdAt)}</td>
+                  <td style={td}>{o.status}</td>
+                  <td style={td}>
+                    {o.items?.reduce((s, it) => s + (it.qty || 0), 0) ?? "-"}
+                  </td>
+                  <td style={td}>{money(o.total)}</td>
+                  <td style={td}>
+                    <Button
+                      variant="secondary"
+                      onClick={() => openDetails(o._id)}
+                    >
+                      View
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <Modal
+        open={detailsOpen}
+        title={details ? `Order ${details.number}` : "Order details"}
+        onClose={() => {
+          setDetailsOpen(false);
+          setSelectedId("");
+          setDetails(null);
+        }}
+      >
+        {detailsLoading ? (
+          <div>Loading...</div>
+        ) : detailsErr ? (
+          <div style={errorBox}>{detailsErr}</div>
+        ) : !details ? (
+          <div>No data.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}
+            >
+              <Info label="Created" value={formatDT(details.createdAt)} />
+              <Info label="Status" value={details.status} />
+              <Info
+                label="Payment"
+                value={`${details.payment?.method || "-"} | paid ${money(
+                  details.payment?.paidAmount
+                )} | change ${money(details.payment?.change)}`}
+              />
+              <Info
+                label="Totals"
+                value={`subtotal ${money(details.subtotal)} | tax ${money(
+                  details.taxAmount
+                )} | total ${money(details.total)}`}
+              />
+            </div>
+
+            <div
+              style={{
+                overflowX: "auto",
+                border: "1px solid #eee",
+                borderRadius: 14,
+              }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#fbfbfb" }}>
+                    <th style={th}>Item</th>
+                    <th style={th}>Qty</th>
+                    <th style={th}>Price</th>
+                    <th style={th}>Line</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {details.items?.map((it, idx) => (
+                    <tr key={idx} style={{ borderTop: "1px solid #eee" }}>
+                      <td style={td}>
+                        <b>{it.name}</b>
+                        <div style={{ fontSize: 12, color: "#666" }}>
+                          {it.category}
+                        </div>
+                      </td>
+                      <td style={td}>{it.qty}</td>
+                      <td style={td}>{money(it.price)}</td>
+                      <td style={td}>{money(it.lineTotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {details.note ? <Info label="Note" value={details.note} /> : null}
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button variant="secondary" onClick={() => setDetailsOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </section>
+  );
+}
+
+function Info({ label, value }) {
+  return (
+    <div style={{ border: "1px solid #eee", borderRadius: 14, padding: 12 }}>
+      <div style={{ fontSize: 12, color: "#666", fontWeight: 800 }}>
+        {label}
+      </div>
+      <div style={{ fontWeight: 900, marginTop: 4 }}>{value}</div>
+    </div>
+  );
+}
+
 /* ---------------------------------- App ---------------------------------- */
 
 export function App() {
@@ -925,6 +1159,9 @@ export function App() {
             <Tab active={tab === "cashier"} onClick={() => setTab("cashier")}>
               Cashier
             </Tab>
+            <Tab active={tab === "orders"} onClick={() => setTab("orders")}>
+              Orders
+            </Tab>
             <Tab active={tab === "products"} onClick={() => setTab("products")}>
               Products
             </Tab>
@@ -944,7 +1181,13 @@ export function App() {
           gap: 14,
         }}
       >
-        {tab === "cashier" ? <Cashier /> : <ProductsAdmin />}
+        {tab === "cashier" ? (
+          <Cashier />
+        ) : tab === "orders" ? (
+          <OrdersHistory />
+        ) : (
+          <ProductsAdmin />
+        )}
       </main>
     </div>
   );
@@ -1001,4 +1244,33 @@ const td = {
   fontSize: 14,
   color: "#111",
   whiteSpace: "nowrap",
+  verticalAlign: "top",
+};
+
+const listHeader = {
+  background: "#fbfbfb",
+  padding: "10px 12px",
+  fontWeight: 900,
+  fontSize: 12,
+  color: "#555",
+};
+
+const productRowBtn = {
+  width: "100%",
+  textAlign: "left",
+  border: "none",
+  background: "#fff",
+  padding: 12,
+  cursor: "pointer",
+  borderTop: "1px solid #eee",
+  display: "grid",
+  gridTemplateColumns: "1fr auto",
+  gap: 10,
+};
+
+const qtyInput = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid #ddd",
+  outline: "none",
 };
