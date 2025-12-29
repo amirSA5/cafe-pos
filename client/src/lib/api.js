@@ -50,4 +50,20 @@ export const api = {
       }),
     remove: (id) => request(`/api/products/${id}`, { method: "DELETE" }),
   },
+  orders: {
+    checkout: (payload) =>
+      request("/api/orders/checkout", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    list: (params = {}) => {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === "") return;
+        qs.set(k, String(v));
+      });
+      const q = qs.toString();
+      return request(`/api/orders${q ? `?${q}` : ""}`);
+    },
+  },
 };

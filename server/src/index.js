@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 
 import { productsRoutes } from "./routes/productsRoutes.js";
+import { ordersRoutes } from "./routes/ordersRoutes.js";
 
 dotenv.config();
 
@@ -19,6 +20,8 @@ app.get("/api/health", (req, res) => {
 
 // Products
 app.use("/api/products", productsRoutes);
+// Orders
+app.use("/api/orders", ordersRoutes);
 
 async function start() {
   const port = process.env.PORT || 4000;
